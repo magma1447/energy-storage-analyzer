@@ -281,6 +281,12 @@ class OptimizedBatterySimulation:
                       self.flows['grid_charged'].cost)
         print(f"\nNet savings: {net_savings:.2f} SEK")
 
+        # Calculate yearly estimate based on simulation period
+        years = days / 365.25  # We already calculated days earlier in the method
+        if years > 0:
+            yearly_estimate = net_savings / years
+            print(f"  Rough estimate: {yearly_estimate:.2f} SEK/year (disclaimer: not a true value)")
+
         print("\nBattery State Statistics:")
         print(f"Number of times battery was full: {len(self.timestamps_full)}")
         print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
