@@ -23,7 +23,7 @@ def main():
                         help='Discharging loss percentage (default: 7.5)')
     parser.add_argument('--max-grid-power', type=float, default=17250,
                         help='Maximum grid charging power in watts (default: 17250 = 230V * 25A * 3 phases)')
-    parser.add_argument('--output-dir', type=str, default='.',
+    parser.add_argument('--output-dir', type=str, default='out',
                         help='Output directory for visualization files')
     parser.add_argument('--no-grid-charge', action='store_true',
                         help='Disable grid charging')
