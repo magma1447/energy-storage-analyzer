@@ -27,12 +27,19 @@ class EnergyFlow:
         self.monthly_energy = defaultdict(float)
         self.monthly_cost = defaultdict(float)
         self.hourly_energy = defaultdict(float)
+        self.negative_price_energy = 0.0  # Track energy during negative prices
+        self.negative_price_cost = 0.0    # Track cost during negative prices
 
     def add(self, energy: float, price: float, timestamp: str):
         """Add energy (in Wh) and its associated cost/value (in SEK)"""
         self.energy += energy
         cost = (energy / 1000) * price  # Convert to kWh for price calculation
         self.cost += cost
+
+        # Track if this was during negative pricing
+        if price < 0:
+            self.negative_price_energy += energy
+            self.negative_price_cost += cost
 
         # Track monthly data
         month = timestamp[:7]  # Get YYYY-MM

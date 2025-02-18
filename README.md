@@ -47,3 +47,6 @@ options:
 
 Verifies that the output data is as expected with the given sample file.
 
+# json data
+The current json file has been created by `coding/power-usage-battery-analyze/app3.php`. This code should be ported to python and added to this repository.
+
