@@ -63,8 +63,8 @@ class OptimizedBatterySimulation:
                 if minute.max_charging_power > 0:
                     grid_charge_candidates.append(minute)
 
-        # Sort by price to optimize
-        excess_minutes.sort(key=lambda x: x.export_price)  # Store when export price is lowest
+        # Sort by price to optimize, putting negative prices first, then lowest export price
+        excess_minutes.sort(key=lambda x: (x.export_price >= 0, x.export_price))
         deficit_minutes.sort(key=lambda x: x.import_price, reverse=True)  # Use when import price is highest
         grid_charge_candidates.sort(key=lambda x: x.import_price)  # Charge from grid when price is lowest
 
