@@ -230,6 +230,20 @@ class OptimizedBatterySimulation:
             print("\nOptimized Battery Simulation Summary")
             print("=" * 50)
 
+            # Find first and last dates
+            all_hours = sorted(self.battery_levels.keys())
+            first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
+            last_date = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+
+            # Format dates and calculate duration
+            first_date_str = first_date.strftime("%Y-%m-%d %H:%M")
+            last_date_str = last_date.strftime("%Y-%m-%d %H:%M")
+            days = (last_date - first_date).total_seconds() / (24 * 3600)
+            years = days / 365.25
+
+            print(f"\nTime period: {first_date_str} to {last_date_str}")
+            print(f"  Days: {days:.0f} ({years:.2f} years)")
+
             print("\nBattery Configuration:")
             print(f"  Capacity: {self.BATTERY_CAPACITY_WH/1000:.1f} kWh")
             print(f"  Final level: {self.battery_level/1000:.2f} kWh")
@@ -271,14 +285,20 @@ class OptimizedBatterySimulation:
             if all(flow.negative_price_energy == 0 for flow in self.flows.values()):
                 print("No energy was handled during negative prices")
 
-            print("\nBattery State Statistics:")
-            print(f"Number of times battery was full: {len(self.timestamps_full)}")
-            print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
-
             net_savings = (self.flows['battery_used'].cost -
                           self.flows['export_stored'].cost -
                           self.flows['grid_charged'].cost)
             print(f"\nNet savings: {net_savings:.2f} SEK")
+
+            # Calculate yearly estimate based on simulation period
+            years = days / 365.25  # We already calculated days earlier in the method
+            if years > 0:
+                yearly_estimate = net_savings / years
+                print(f"  Rough estimate: {yearly_estimate:.2f} SEK/year (disclaimer: not a true value)")
+
+            print("\nBattery State Statistics:")
+            print(f"Number of times battery was full: {len(self.timestamps_full)}")
+            print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
 
             # Calculate time percentages
             hourly_samples = len(self.battery_levels)
