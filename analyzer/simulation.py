@@ -37,21 +37,18 @@ class OptimizedBatterySimulation:
         """Optimize battery usage for a time window"""
         if not window:
             return
-            
+
         # Initialize collections
         excess_minutes = []
         deficit_minutes = []
         grid_charge_candidates = []
-        
-        # Sort minutes chronologically            
-        minutes = sorted(window, key=lambda x: x.timestamp)
-        
+
+        # Track hourly battery changes
+        hourly_changes = defaultdict(float)
+        initial_battery_level = self.battery_level
+
         # First pass: identify hours and categorize minutes
-        for minute in minutes:
-            hour = minute.timestamp[:13] + ":00:00Z"
-            if hour not in self.battery_levels:
-                self._store_battery_level(hour)
-            
+        for minute in window:
             if minute.wh > 0:
                 excess_minutes.append(minute)
             else:
@@ -64,28 +61,81 @@ class OptimizedBatterySimulation:
         deficit_minutes.sort(key=lambda x: x.import_price, reverse=True)  # Use when import price is highest
         grid_charge_candidates.sort(key=lambda x: x.import_price)  # Charge from grid when price is lowest
 
-        # Process in order
+        # Reset battery level for accurate tracking
+        self.battery_level = initial_battery_level
+
+        # Process in batches
+        # 1. First store all excess power
         for minute in excess_minutes:
+            before_level = self.battery_level
             self._store_excess_power(minute)
-            # Update battery level for the hour after storing excess
+            # Track hourly change
             hour = minute.timestamp[:13] + ":00:00Z"
-            self.battery_levels[hour] = self.battery_level
+            hourly_changes[hour] += self.battery_level - before_level
 
+        # 2. Then handle grid charging
         if self.enable_grid_charge:
-            self._optimize_grid_charging(grid_charge_candidates, deficit_minutes)
-            # Update battery levels after grid charging
-            #for min in minutes:
-            #    hour = min.timestamp[:13] + ":00:00Z"
-            #    self.battery_levels[hour] = self.battery_level
-            if grid_charge_candidates:
-                hour = grid_charge_candidates[0].timestamp[:13] + ":00:00Z"
-                self.battery_levels[hour] = self.battery_level
+            for minute in grid_charge_candidates:
+                potential_usage = [m for m in deficit_minutes
+                                 if m.timestamp > minute.timestamp
+                                 and m.import_price > minute.import_price * 1.2]
 
+                if potential_usage:
+                    before_level = self.battery_level
+                    self._perform_grid_charging(minute, potential_usage[0])
+                    # Track hourly change
+                    hour = minute.timestamp[:13] + ":00:00Z"
+                    hourly_changes[hour] += self.battery_level - before_level
+
+        # 3. Finally use stored power
         for minute in deficit_minutes:
+            before_level = self.battery_level
             self._use_stored_power(minute)
-            # Update battery level for the hour after using power
+            # Track hourly change
             hour = minute.timestamp[:13] + ":00:00Z"
-            self.battery_levels[hour] = self.battery_level
+            hourly_changes[hour] += self.battery_level - before_level
+
+        # Update battery levels for all affected hours
+        for hour in sorted(hourly_changes.keys()):
+            # If this is the first entry for this hour, use the initial level
+            if hour not in self.battery_levels:
+                prev_hour = max((h for h in self.battery_levels.keys() if h < hour), default=None)
+                base_level = self.battery_levels[prev_hour] if prev_hour else initial_battery_level
+                self.battery_levels[hour] = base_level + hourly_changes[hour]
+            else:
+                self.battery_levels[hour] += hourly_changes[hour]
+
+    def _perform_grid_charging(self, charge_minute: MinuteData, usage_minute: MinuteData) -> None:
+        """Perform grid charging if profitable"""
+        if self.battery_level >= self.MAX_BATTERY_LEVEL:
+            return
+
+        # Calculate how much we could charge
+        available_space = self.MAX_BATTERY_LEVEL - self.battery_level
+        max_charge = min(
+            charge_minute.max_charging_power / 60,  # Convert W to Wh
+            available_space / CHARGING_EFFICIENCY
+        )
+
+        if max_charge > 0:
+            # Calculate potential profit
+            charge_cost = (max_charge * charge_minute.import_price / 1000)
+            discharge_energy = max_charge * CHARGING_EFFICIENCY * DISCHARGING_EFFICIENCY
+            potential_savings = discharge_energy * usage_minute.import_price / 1000
+
+            if potential_savings > charge_cost * 1.1:  # 10% minimum profit threshold
+                # Perform grid charging
+                stored_energy = max_charge * CHARGING_EFFICIENCY
+                self.battery_level += stored_energy
+
+                # Track the energy flow
+                self.flows['grid_charged'].add(max_charge, charge_minute.import_price, charge_minute.timestamp)
+
+                self.actions_log.append(
+                    f"Grid charged {stored_energy:.2f}Wh at {charge_minute.timestamp} "
+                    f"(price: {charge_minute.import_price:.3f}, future price: {usage_minute.import_price:.3f}, "
+                    f"profit: {(potential_savings - charge_cost):.3f} SEK)"
+                )
 
     def _store_battery_level(self, timestamp: str):
         """Store the battery level for the current hour"""
