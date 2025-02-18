@@ -42,3 +42,8 @@ options:
   --end-time END_TIME   End time in ISO format (e.g., 2024-05-02T00:00:00Z)
 ```
 
+# Tests
+`python3 -m unittest tests/test_simulation.py`
+
+Verifies that the output data is as expected with the given sample file.
+
