@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 from collections import defaultdict
+from datetime import datetime
 from .models import MinuteData, EnergyFlow, CHARGING_EFFICIENCY, DISCHARGING_EFFICIENCY
 
 class OptimizedBatterySimulation:
@@ -223,62 +224,88 @@ class OptimizedBatterySimulation:
         print("\nOptimized Battery Simulation Summary")
         print("=" * 50)
         
+        # Find first and last dates
+        all_hours = sorted(self.battery_levels.keys())
+        first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
+        last_date = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+
+        # Format dates and calculate duration
+        first_date_str = first_date.strftime("%Y-%m-%d %H:%M")
+        last_date_str = last_date.strftime("%Y-%m-%d %H:%M")
+        days = (last_date - first_date).total_seconds() / (24 * 3600)
+        years = days / 365.25
+
+        print(f"\nTime period: {first_date_str} to {last_date_str}")
+        print(f"  Days: {days:.0f} ({years:.2f} years)")
+
         print("\nBattery Configuration:")
         print(f"  Capacity: {self.BATTERY_CAPACITY_WH/1000:.1f} kWh")
         print(f"  Final level: {self.battery_level/1000:.2f} kWh")
-        
+
         # Energy flows with monthly breakdown
         print("\nEnergy Flows:")
         print(f"Excess energy stored: {self.flows['export_stored'].energy/1000:.2f} kWh")
         for month in sorted(self.flows['export_stored'].monthly_energy.keys()):
             print(f"  {month}: {self.flows['export_stored'].monthly_energy[month]/1000:.2f} kWh")
-            
+
         print(f"\nGrid energy charged: {self.flows['grid_charged'].energy/1000:.2f} kWh")
         for month in sorted(self.flows['grid_charged'].monthly_energy.keys()):
             print(f"  {month}: {self.flows['grid_charged'].monthly_energy[month]/1000:.2f} kWh")
-            
+
         print(f"\nBattery energy used: {self.flows['battery_used'].energy/1000:.2f} kWh")
         for month in sorted(self.flows['battery_used'].monthly_energy.keys()):
             print(f"  {month}: {self.flows['battery_used'].monthly_energy[month]/1000:.2f} kWh")
-        
+
         # Financial summary with monthly breakdown
         print("\nFinancial Summary:")
         print(f"Export value lost: {self.flows['export_stored'].cost:.2f} SEK")
         for month in sorted(self.flows['export_stored'].monthly_cost.keys()):
             print(f"  {month}: {self.flows['export_stored'].monthly_cost[month]:.2f} SEK")
-            
+
         print(f"\nGrid charging cost: {self.flows['grid_charged'].cost:.2f} SEK")
         for month in sorted(self.flows['grid_charged'].monthly_cost.keys()):
             print(f"  {month}: {self.flows['grid_charged'].monthly_cost[month]:.2f} SEK")
-            
+
         print(f"\nImport cost saved: {self.flows['battery_used'].cost:.2f} SEK")
         for month in sorted(self.flows['battery_used'].monthly_cost.keys()):
             print(f"  {month}: {self.flows['battery_used'].monthly_cost[month]:.2f} SEK")
-            
-        net_savings = (self.flows['battery_used'].cost - 
-                      self.flows['export_stored'].cost - 
+
+        net_savings = (self.flows['battery_used'].cost -
+                      self.flows['export_stored'].cost -
                       self.flows['grid_charged'].cost)
         print(f"\nNet savings: {net_savings:.2f} SEK")
-        
+
         print("\nBattery State Statistics:")
         print(f"Number of times battery was full: {len(self.timestamps_full)}")
         print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
-        
+
         # Calculate time percentages
         hourly_samples = len(self.battery_levels)
         if hourly_samples > 0:
-            full_count = sum(1 for t in self.battery_levels.values() 
+            full_count = sum(1 for t in self.battery_levels.values()
                            if t >= self.MAX_BATTERY_LEVEL * 0.99)
-            empty_count = sum(1 for t in self.battery_levels.values() 
+            empty_count = sum(1 for t in self.battery_levels.values()
                             if t <= self.MIN_BATTERY_LEVEL * 1.01)
-            
+
             full_percent = (full_count / hourly_samples) * 100
             empty_percent = (empty_count / hourly_samples) * 100
             partial_percent = 100 - full_percent - empty_percent
             print(f"Battery was full {full_percent:.1f}% of the time")
             print(f"Battery was empty {empty_percent:.1f}% of the time")
             print(f"Battery was partially charged {partial_percent:.1f}% of the time")
+
+            # Calculate battery cycles
+            total_discharge = self.flows['battery_used'].energy / 1000  # Convert to kWh
+            cycles = total_discharge / (self.BATTERY_CAPACITY_WH / 1000)
+
+            # Calculate days in simulation
+            first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
+            last_date = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+            days = (last_date - first_date).total_seconds() / (24 * 3600)
+
+            print(f"Number of battery cycles: {cycles:.1f}")
+            print(f"Average cycles per day: {(cycles/days):.2f}")
         
-        print("\nGrid Charging Actions (first 5):")
-        for action in self.actions_log[:5]:
-            print(f"  {action}")
+        # print("\nGrid Charging Actions (first 5):")
+        # for action in self.actions_log[:5]:
+        #     print(f"  {action}")

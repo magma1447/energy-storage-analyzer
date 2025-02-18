@@ -2,7 +2,9 @@
 import json
 import sys
 import os
+import gzip
 import argparse
+from datetime import datetime
 from .simulation import OptimizedBatterySimulation
 from .visualization import create_viewer_html
 
@@ -22,24 +24,28 @@ def main():
     parser.add_argument('--end-time', type=str,
                         help='End time in ISO format (e.g., 2024-05-02T00:00:00Z)')
     args = parser.parse_args()
-    
+
     try:
         print(f"Reading input file {args.input_file}...")
-        with open(args.input_file, 'r') as f:
-            data = json.load(f)
-        
+        if args.input_file.endswith('.gz'):
+            with gzip.open(args.input_file, 'rt') as f:
+                data = json.load(f)
+        else:
+            with open(args.input_file, 'r') as f:
+                data = json.load(f)
+
         # Filter data by date range if specified
         if args.start_time or args.end_time:
             filtered_data = {}
             start_time = args.start_time or min(data.keys())
             end_time = args.end_time or max(data.keys())
-            
+
             print(f"Filtering data from {start_time} to {end_time}")
             for timestamp, values in data.items():
                 if start_time <= timestamp <= end_time:
                     filtered_data[timestamp] = values
             data = filtered_data
-            
+
         print(f"Loaded {len(data)} data points")
     except FileNotFoundError:
         print(f"Error: Could not find file {args.input_file}")
@@ -47,27 +53,17 @@ def main():
     except json.JSONDecodeError:
         print(f"Error: Invalid JSON in file {args.input_file}")
         sys.exit(1)
-    
+    except gzip.BadGzipFile:
+        print(f"Error: Invalid gzip file {args.input_file}")
+        sys.exit(1)
+
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
-        
+
     # Run simulation
     simulation = OptimizedBatterySimulation(args.battery_capacity, not args.no_grid_charge)
     simulation.process_data(data, args.window)
     simulation.print_summary()
-    
-
-    # DEBUG
-    #print("\nDebug - Available hours in battery_levels:")
-    #for hour in sorted(simulation.battery_levels.keys())[:24]:  # Show first 24 entries
-    #    print(f"  {hour}: {simulation.battery_levels[hour]}")
-    #
-    #print("\nDebug - Hours with grid charging:")
-    #for hour in sorted(simulation.flows['grid_charged'].hourly_energy.keys())[:24]:
-    #    value = simulation.flows['grid_charged'].hourly_energy[hour]
-    #    if value > 0:
-    #        print(f"  {hour}: {value:.2f} Wh")
-    # -DEBUG
 
     # Generate visualization data
     viz_data = {
