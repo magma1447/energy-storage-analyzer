@@ -1,16 +1,21 @@
 from typing import Dict, Any, List
 from collections import defaultdict
 from datetime import datetime
-from .models import MinuteData, EnergyFlow, CHARGING_EFFICIENCY, DISCHARGING_EFFICIENCY
+from .models import MinuteData, EnergyFlow
 
 class OptimizedBatterySimulation:
-    def __init__(self, battery_capacity_wh: float, enable_grid_charge: bool = True):
-        # Battery-specific constants
+    def __init__(self, battery_capacity_wh: float, enable_grid_charge: bool = True,
+                 depth_of_discharge: float = 0.05, charging_efficiency: float = 0.925,
+                 discharging_efficiency: float = 0.925, max_charging_power_w: float = 17250):
+        # Configuration
         self.BATTERY_CAPACITY_WH = battery_capacity_wh
-        self.MIN_BATTERY_LEVEL = battery_capacity_wh * 0.05  # 5% DoD
+        self.MIN_BATTERY_LEVEL = battery_capacity_wh * depth_of_discharge
         self.MAX_BATTERY_LEVEL = battery_capacity_wh
         self.enable_grid_charge = enable_grid_charge
-        
+        self.charging_efficiency = charging_efficiency
+        self.discharging_efficiency = discharging_efficiency
+        self.max_charging_power_w = max_charging_power_w
+
         # State
         self.battery_level = self.MIN_BATTERY_LEVEL
         self.flows = {
@@ -27,11 +32,12 @@ class OptimizedBatterySimulation:
         """Process data in sliding windows to enable look-ahead optimization"""
         print(f"\nProcessing data with {window_size} minute windows...")
         timestamps = sorted(data.keys())
-        
+
         # Process in windows (default 24h = 1440 minutes)
         for i in range(0, len(timestamps), window_size):
             window_timestamps = timestamps[i:i + window_size]
-            window_data = [MinuteData.from_json(ts, data[ts]) for ts in window_timestamps]
+            window_data = [MinuteData.from_json(ts, data[ts], self.max_charging_power_w)
+                          for ts in window_timestamps]
             self._optimize_window(window_data)
 
     def _optimize_window(self, window: List[MinuteData]) -> None:
@@ -115,18 +121,18 @@ class OptimizedBatterySimulation:
         available_space = self.MAX_BATTERY_LEVEL - self.battery_level
         max_charge = min(
             charge_minute.max_charging_power / 60,  # Convert W to Wh
-            available_space / CHARGING_EFFICIENCY
+            available_space / self.charging_efficiency
         )
 
         if max_charge > 0:
             # Calculate potential profit
             charge_cost = (max_charge * charge_minute.import_price / 1000)
-            discharge_energy = max_charge * CHARGING_EFFICIENCY * DISCHARGING_EFFICIENCY
+            discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
             potential_savings = discharge_energy * usage_minute.import_price / 1000
 
             if potential_savings > charge_cost * 1.1:  # 10% minimum profit threshold
                 # Perform grid charging
-                stored_energy = max_charge * CHARGING_EFFICIENCY
+                stored_energy = max_charge * self.charging_efficiency
                 self.battery_level += stored_energy
 
                 # Track the energy flow
@@ -146,10 +152,10 @@ class OptimizedBatterySimulation:
     def _store_excess_power(self, minute: MinuteData) -> None:
         """Store excess power, prioritizing lowest export price periods"""
         available_space = self.MAX_BATTERY_LEVEL - self.battery_level
-        storable_before_losses = min(minute.wh, available_space / CHARGING_EFFICIENCY)
-        
+        storable_before_losses = min(minute.wh, available_space / self.charging_efficiency)
+
         if storable_before_losses > 0:
-            stored_energy = storable_before_losses * CHARGING_EFFICIENCY
+            stored_energy = storable_before_losses * self.charging_efficiency
             self.battery_level += stored_energy
             
             # Track the energy flow
@@ -169,8 +175,8 @@ class OptimizedBatterySimulation:
                 break
 
             # Find highest price usage periods that haven't been processed
-            potential_usage = [m for m in usage_candidates 
-                             if m.timestamp > charge_minute.timestamp 
+            potential_usage = [m for m in usage_candidates
+                             if m.timestamp > charge_minute.timestamp
                              and m.import_price > charge_minute.import_price * 1.2]  # 20% price difference threshold
 
             if potential_usage:
@@ -178,18 +184,18 @@ class OptimizedBatterySimulation:
                 available_space = self.MAX_BATTERY_LEVEL - self.battery_level
                 max_charge = min(
                     charge_minute.max_charging_power / 60,  # Convert W to Wh
-                    available_space / CHARGING_EFFICIENCY
+                    available_space / self.charging_efficiency
                 )
 
                 if max_charge > 0:
                     # Calculate potential profit
                     charge_cost = (max_charge * charge_minute.import_price / 1000)
-                    discharge_energy = max_charge * CHARGING_EFFICIENCY * DISCHARGING_EFFICIENCY
+                    discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
                     potential_savings = discharge_energy * potential_usage[0].import_price / 1000
 
                     if potential_savings > charge_cost * 1.1:  # 10% minimum profit threshold
                         # Perform grid charging
-                        stored_energy = max_charge * CHARGING_EFFICIENCY
+                        stored_energy = max_charge * self.charging_efficiency
                         self.battery_level += stored_energy
                         
                         # Track the energy flow
@@ -207,11 +213,11 @@ class OptimizedBatterySimulation:
             return
 
         energy_needed = -minute.wh
-        usable_battery_energy = (self.battery_level - self.MIN_BATTERY_LEVEL) * DISCHARGING_EFFICIENCY
+        usable_battery_energy = (self.battery_level - self.MIN_BATTERY_LEVEL) * self.discharging_efficiency
         energy_from_battery = min(energy_needed, usable_battery_energy)
-        
+
         if energy_from_battery > 0:
-            actual_battery_drain = energy_from_battery / DISCHARGING_EFFICIENCY
+            actual_battery_drain = energy_from_battery / self.discharging_efficiency
             self.battery_level -= actual_battery_drain
             
             # Track the energy flow
