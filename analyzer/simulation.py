@@ -212,109 +212,109 @@ class OptimizedBatterySimulation:
                 self.timestamps_empty.append(minute.timestamp)
 
     def print_summary(self) -> None:
-            print("\nOptimized Battery Simulation Summary")
-            print("=" * 50)
+        print("\nOptimized Battery Simulation Summary")
+        print("=" * 50)
 
-            # Find first and last dates
-            all_hours = sorted(self.battery_levels.keys())
-            first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
+        # Find first and last dates
+        all_hours = sorted(self.battery_levels.keys())
+        first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
 
-            # For the last date, we need to add 59:59 to show the true end time
-            last_hour = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
-            last_date = datetime(last_hour.year, last_hour.month, last_hour.day,
-                                last_hour.hour, 59, 59)
+        # For the last date, we need to add 59:59 to show the true end time
+        last_hour = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+        last_date = datetime(last_hour.year, last_hour.month, last_hour.day,
+                            last_hour.hour, 59, 59)
 
-            # Format dates and calculate duration
-            first_date_str = first_date.strftime("%Y-%m-%d %H:%M")
-            last_date_str = last_date.strftime("%Y-%m-%d %H:%M")
-            days = (last_date - first_date).total_seconds() / (24 * 3600)
-            years = days / 365.25
+        # Format dates and calculate duration
+        first_date_str = first_date.strftime("%Y-%m-%d %H:%M")
+        last_date_str = last_date.strftime("%Y-%m-%d %H:%M")
+        days = (last_date - first_date).total_seconds() / (24 * 3600)
+        years = days / 365.25
 
-            print(f"\nTime period: {first_date_str} to {last_date_str}")
-            print(f"  Days: {days:.0f} ({years:.2f} years)")
+        print(f"\nTime period: {first_date_str} to {last_date_str}")
+        print(f"  Days: {days:.0f} ({years:.2f} years)")
 
-            print("\nBattery Configuration:")
-            print(f"  Capacity: {self.BATTERY_CAPACITY_WH/1000:.1f} kWh")
-            print(f"  Final level: {self.battery_level/1000:.2f} kWh")
+        print("\nBattery Configuration:")
+        print(f"  Capacity: {self.BATTERY_CAPACITY_WH/1000:.1f} kWh")
+        print(f"  Final level: {self.battery_level/1000:.2f} kWh")
 
-            # Energy flows with monthly breakdown
-            print("\nEnergy Flows:")
-            print(f"Excess energy stored: {self.flows['export_stored'].energy/1000:.2f} kWh")
-            for month in sorted(self.flows['export_stored'].monthly_energy.keys()):
-                print(f"  {month}: {self.flows['export_stored'].monthly_energy[month]/1000:.2f} kWh")
+        # Energy flows with monthly breakdown
+        print("\nEnergy Flows:")
+        print(f"Excess energy stored: {self.flows['export_stored'].energy/1000:.2f} kWh")
+        for month in sorted(self.flows['export_stored'].monthly_energy.keys()):
+            print(f"  {month}: {self.flows['export_stored'].monthly_energy[month]/1000:.2f} kWh")
 
-            print(f"\nGrid energy charged: {self.flows['grid_charged'].energy/1000:.2f} kWh")
-            for month in sorted(self.flows['grid_charged'].monthly_energy.keys()):
-                print(f"  {month}: {self.flows['grid_charged'].monthly_energy[month]/1000:.2f} kWh")
+        print(f"\nGrid energy charged: {self.flows['grid_charged'].energy/1000:.2f} kWh")
+        for month in sorted(self.flows['grid_charged'].monthly_energy.keys()):
+            print(f"  {month}: {self.flows['grid_charged'].monthly_energy[month]/1000:.2f} kWh")
 
-            print(f"\nBattery energy used: {self.flows['battery_used'].energy/1000:.2f} kWh")
-            for month in sorted(self.flows['battery_used'].monthly_energy.keys()):
-                print(f"  {month}: {self.flows['battery_used'].monthly_energy[month]/1000:.2f} kWh")
+        print(f"\nBattery energy used: {self.flows['battery_used'].energy/1000:.2f} kWh")
+        for month in sorted(self.flows['battery_used'].monthly_energy.keys()):
+            print(f"  {month}: {self.flows['battery_used'].monthly_energy[month]/1000:.2f} kWh")
 
-            # Financial summary with monthly breakdown
-            print("\nFinancial Summary:")
-            print(f"Export value lost: {self.flows['export_stored'].cost:.2f} SEK")
-            for month in sorted(self.flows['export_stored'].monthly_cost.keys()):
-                print(f"  {month}: {self.flows['export_stored'].monthly_cost[month]:.2f} SEK")
+        # Financial summary with monthly breakdown
+        print("\nFinancial Summary:")
+        print(f"Export value lost: {self.flows['export_stored'].cost:.2f} SEK")
+        for month in sorted(self.flows['export_stored'].monthly_cost.keys()):
+            print(f"  {month}: {self.flows['export_stored'].monthly_cost[month]:.2f} SEK")
 
-            print(f"\nGrid charging cost: {self.flows['grid_charged'].cost:.2f} SEK")
-            for month in sorted(self.flows['grid_charged'].monthly_cost.keys()):
-                print(f"  {month}: {self.flows['grid_charged'].monthly_cost[month]:.2f} SEK")
+        print(f"\nGrid charging cost: {self.flows['grid_charged'].cost:.2f} SEK")
+        for month in sorted(self.flows['grid_charged'].monthly_cost.keys()):
+            print(f"  {month}: {self.flows['grid_charged'].monthly_cost[month]:.2f} SEK")
 
-            print(f"\nImport cost saved: {self.flows['battery_used'].cost:.2f} SEK")
-            for month in sorted(self.flows['battery_used'].monthly_cost.keys()):
-                print(f"  {month}: {self.flows['battery_used'].monthly_cost[month]:.2f} SEK")
+        print(f"\nImport cost saved: {self.flows['battery_used'].cost:.2f} SEK")
+        for month in sorted(self.flows['battery_used'].monthly_cost.keys()):
+            print(f"  {month}: {self.flows['battery_used'].monthly_cost[month]:.2f} SEK")
 
-            # Add section about negative prices
-            print("\nNegative Price Statistics:")
-            for flow_name, flow in self.flows.items():
-                if flow.negative_price_energy > 0:
-                    print(f"WARNING: {flow_name}: {flow.negative_price_energy/1000:.2f} kWh during negative prices")
-                    print(f"         Cost impact: {flow.negative_price_cost:.2f} SEK")
-            if all(flow.negative_price_energy == 0 for flow in self.flows.values()):
-                print("No energy was handled during negative prices")
+        # Add section about negative prices
+        print("\nNegative Price Statistics:")
+        for flow_name, flow in self.flows.items():
+            if flow.negative_price_energy > 0:
+                print(f"WARNING: {flow_name}: {flow.negative_price_energy/1000:.2f} kWh during negative prices")
+                print(f"         Cost impact: {flow.negative_price_cost:.2f} SEK")
+        if all(flow.negative_price_energy == 0 for flow in self.flows.values()):
+            print("No energy was handled during negative prices")
 
-            # Add warning about price margin if it's too low
-            current_margin = self.min_price_ratio - 1
-            if current_margin < self.combined_losses:
-                print(f"\nWARNING: Current price margin ({current_margin*100:.1f}%) is lower than")
-                print(f"         combined losses ({self.combined_losses*100:.1f}%) from")
-                print(f"         charging loss ({(1-self.charging_efficiency)*100:.1f}%) and")
-                print(f"         discharging loss ({(1-self.discharging_efficiency)*100:.1f}%)")
+        # Add warning about price margin if it's too low
+        current_margin = self.min_price_ratio - 1
+        if current_margin < self.combined_losses:
+            print(f"\nWARNING: Current price margin ({current_margin*100:.1f}%) is lower than")
+            print(f"         combined losses ({self.combined_losses*100:.1f}%) from")
+            print(f"         charging loss ({(1-self.charging_efficiency)*100:.1f}%) and")
+            print(f"         discharging loss ({(1-self.discharging_efficiency)*100:.1f}%)")
 
-            net_savings = (self.flows['battery_used'].cost -
-                          self.flows['export_stored'].cost -
-                          self.flows['grid_charged'].cost)
-            print(f"\nNet savings: {net_savings:.2f} SEK")
+        net_savings = (self.flows['battery_used'].cost -
+                      self.flows['export_stored'].cost -
+                      self.flows['grid_charged'].cost)
+        print(f"\nNet savings: {net_savings:.2f} SEK")
 
-            # Calculate yearly estimate based on simulation period
-            years = days / 365.25  # We already calculated days earlier in the method
-            if years > 0:
-                yearly_estimate = net_savings / years
-                print(f"  Rough estimate: {yearly_estimate:.2f} SEK/year (disclaimer: not a true value)")
+        # Calculate yearly estimate based on simulation period
+        years = days / 365.25  # We already calculated days earlier in the method
+        if years > 0:
+            yearly_estimate = net_savings / years
+            print(f"  Rough estimate: {yearly_estimate:.2f} SEK/year (disclaimer: not a true value)")
 
-            print("\nBattery State Statistics:")
-            print(f"Number of times battery was full: {len(self.timestamps_full)}")
-            print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
+        print("\nBattery State Statistics:")
+        print(f"Number of times battery was full: {len(self.timestamps_full)}")
+        print(f"Number of times battery was empty: {len(self.timestamps_empty)}")
 
-            # Calculate time percentages
-            hourly_samples = len(self.battery_levels)
-            if hourly_samples > 0:
-                full_count = sum(1 for t in self.battery_levels.values()
-                               if t >= self.MAX_BATTERY_LEVEL * 0.99)
-                empty_count = sum(1 for t in self.battery_levels.values()
-                                if t <= self.MIN_BATTERY_LEVEL * 1.01)
+        # Calculate time percentages
+        hourly_samples = len(self.battery_levels)
+        if hourly_samples > 0:
+            full_count = sum(1 for t in self.battery_levels.values()
+                           if t >= self.MAX_BATTERY_LEVEL * 0.99)
+            empty_count = sum(1 for t in self.battery_levels.values()
+                            if t <= self.MIN_BATTERY_LEVEL * 1.01)
 
-                full_percent = (full_count / hourly_samples) * 100
-                empty_percent = (empty_count / hourly_samples) * 100
-                partial_percent = 100 - full_percent - empty_percent
-                print(f"Battery was full {full_percent:.1f}% of the time")
-                print(f"Battery was empty {empty_percent:.1f}% of the time")
-                print(f"Battery was partially charged {partial_percent:.1f}% of the time")
+            full_percent = (full_count / hourly_samples) * 100
+            empty_percent = (empty_count / hourly_samples) * 100
+            partial_percent = 100 - full_percent - empty_percent
+            print(f"Battery was full {full_percent:.1f}% of the time")
+            print(f"Battery was empty {empty_percent:.1f}% of the time")
+            print(f"Battery was partially charged {partial_percent:.1f}% of the time")
 
-                # Calculate battery cycles
-                total_discharge = self.flows['battery_used'].energy / 1000  # Convert to kWh
-                cycles = total_discharge / (self.BATTERY_CAPACITY_WH / 1000)
+            # Calculate battery cycles
+            total_discharge = self.flows['battery_used'].energy / 1000  # Convert to kWh
+            cycles = total_discharge / (self.BATTERY_CAPACITY_WH / 1000)
 
-                print(f"Number of battery cycles: {cycles:.1f}")
-                print(f"Average cycles per day: {(cycles/hourly_samples*24):.2f}")
+            print(f"Number of battery cycles: {cycles:.1f}")
+            print(f"Average cycles per day: {(cycles/hourly_samples*24):.2f}")
