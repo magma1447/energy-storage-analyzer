@@ -25,8 +25,8 @@ def main():
                         help='Maximum grid charging power in watts (default: 17250 = 230V * 25A * 3 phases)')
     parser.add_argument('--loss-multiplier', type=float, default=1.25,
                         help='Multiplier for losses when calculating required price difference (default: 1.25)')
-    parser.add_argument('--output-dir', type=str, default='.',
-                        help='Output directory for visualization files')
+    parser.add_argument('--output-dir', type=str,
+                        help='Output directory for visualization files (if specified)')
     parser.add_argument('--no-grid-charge', action='store_true',
                         help='Disable grid charging')
     parser.add_argument('--start-time', type=str,
@@ -67,9 +67,6 @@ def main():
         print(f"Error: Invalid gzip file {args.input_file}")
         sys.exit(1)
 
-    # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
-
     # Run simulation with configured parameters
     simulation = OptimizedBatterySimulation(
         battery_capacity_wh=args.battery_capacity,
@@ -83,30 +80,35 @@ def main():
     simulation.process_data(data, args.window)
     simulation.print_summary()
 
-    # Generate visualization data
-    viz_data = {
-        'config': {
-            'batteryCapacity': simulation.BATTERY_CAPACITY_WH,
-            'minLevel': simulation.MIN_BATTERY_LEVEL,
-            'maxLevel': simulation.MAX_BATTERY_LEVEL
-        },
-        'timeSeries': [{
-            'timestamp': ts,
-            'batteryLevel': simulation.battery_levels[ts],
-            'solarStored': simulation.flows['export_stored'].hourly_energy.get(ts, 0),
-            'gridCharged': simulation.flows['grid_charged'].hourly_energy.get(ts, 0),
-            'batteryUsed': simulation.flows['battery_used'].hourly_energy.get(ts, 0)
-        } for ts in sorted(simulation.battery_levels.keys())]
-    }
-    
-    # Create and write visualization files
-    viewer_html = create_viewer_html(json.dumps(viz_data))
-    html_path = os.path.join(args.output_dir, 'battery_viewer.html')
-    with open(html_path, 'w') as f:
-        f.write(viewer_html)
-    
-    print(f"\nVisualization file has been created: {html_path}")
-    print("\nOpen this file in a web browser to view the interactive visualization.")
+    # Only generate visualization if output_dir is specified
+    if args.output_dir:
+        # Create output directory if it doesn't exist
+        os.makedirs(args.output_dir, exist_ok=True)
+
+        # Generate visualization data
+        viz_data = {
+            'config': {
+                'batteryCapacity': simulation.BATTERY_CAPACITY_WH,
+                'minLevel': simulation.MIN_BATTERY_LEVEL,
+                'maxLevel': simulation.MAX_BATTERY_LEVEL
+            },
+            'timeSeries': [{
+                'timestamp': ts,
+                'batteryLevel': simulation.battery_levels[ts],
+                'solarStored': simulation.flows['export_stored'].hourly_energy.get(ts, 0),
+                'gridCharged': simulation.flows['grid_charged'].hourly_energy.get(ts, 0),
+                'batteryUsed': simulation.flows['battery_used'].hourly_energy.get(ts, 0)
+            } for ts in sorted(simulation.battery_levels.keys())]
+        }
+
+        # Create and write visualization files
+        viewer_html = create_viewer_html(json.dumps(viz_data))
+        html_path = os.path.join(args.output_dir, 'battery_viewer.html')
+        with open(html_path, 'w') as f:
+            f.write(viewer_html)
+
+        print(f"\nVisualization file has been created: {html_path}")
+        print("Open this file in a web browser to view the interactive visualization.")
 
 if __name__ == "__main__":
     main()
