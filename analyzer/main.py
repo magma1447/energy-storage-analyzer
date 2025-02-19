@@ -23,7 +23,9 @@ def main():
                         help='Discharging loss percentage (default: 7.5)')
     parser.add_argument('--max-grid-power', type=float, default=17250,
                         help='Maximum grid charging power in watts (default: 17250 = 230V * 25A * 3 phases)')
-    parser.add_argument('--output-dir', type=str, default='out',
+    parser.add_argument('--loss-multiplier', type=float, default=1.25,
+                        help='Multiplier for losses when calculating required price difference (default: 1.25)')
+    parser.add_argument('--output-dir', type=str, default='.',
                         help='Output directory for visualization files')
     parser.add_argument('--no-grid-charge', action='store_true',
                         help='Disable grid charging')
@@ -32,11 +34,6 @@ def main():
     parser.add_argument('--end-time', type=str,
                         help='End time in ISO format (e.g., 2024-05-02T00:00:00Z)')
     args = parser.parse_args()
-
-    # Convert loss percentages to efficiency factors
-    charging_efficiency = (100 - args.charging_loss) / 100
-    discharging_efficiency = (100 - args.discharging_loss) / 100
-    depth_of_discharge = args.depth_of_discharge / 100
 
     try:
         print(f"Reading input file {args.input_file}...")
@@ -77,10 +74,11 @@ def main():
     simulation = OptimizedBatterySimulation(
         battery_capacity_wh=args.battery_capacity,
         enable_grid_charge=not args.no_grid_charge,
-        depth_of_discharge=depth_of_discharge,
-        charging_efficiency=charging_efficiency,
-        discharging_efficiency=discharging_efficiency,
-        max_charging_power_w=args.max_grid_power
+        depth_of_discharge=args.depth_of_discharge / 100,  # Convert percentage to decimal
+        charging_efficiency=(100 - args.charging_loss) / 100,  # Convert loss percentage to efficiency
+        discharging_efficiency=(100 - args.discharging_loss) / 100,  # Convert loss percentage to efficiency
+        max_charging_power_w=args.max_grid_power,
+        loss_multiplier=args.loss_multiplier
     )
     simulation.process_data(data, args.window)
     simulation.print_summary()

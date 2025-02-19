@@ -6,7 +6,8 @@ from .models import MinuteData, EnergyFlow
 class OptimizedBatterySimulation:
     def __init__(self, battery_capacity_wh: float, enable_grid_charge: bool = True,
                  depth_of_discharge: float = 0.05, charging_efficiency: float = 0.925,
-                 discharging_efficiency: float = 0.925, max_charging_power_w: float = 17250):
+                 discharging_efficiency: float = 0.925, max_charging_power_w: float = 17250,
+                 loss_multiplier: float = 1.25):
         # Configuration
         self.BATTERY_CAPACITY_WH = battery_capacity_wh
         self.MIN_BATTERY_LEVEL = battery_capacity_wh * depth_of_discharge
@@ -15,6 +16,19 @@ class OptimizedBatterySimulation:
         self.charging_efficiency = charging_efficiency
         self.discharging_efficiency = discharging_efficiency
         self.max_charging_power_w = max_charging_power_w
+        self.loss_multiplier = loss_multiplier
+
+        # Calculate compound losses from both charging and discharging
+        combined_losses = 1 - (charging_efficiency * discharging_efficiency)
+        self.min_price_ratio = 1 + (combined_losses * loss_multiplier)
+
+        print(f"\nGrid charging parameters:")
+        print(f"  Combined losses: {combined_losses*100:.1f}%")
+        print(f"  Loss multiplier: {loss_multiplier:.4f}")
+        print(f"  Required price ratio: {self.min_price_ratio:.4f} ({(self.min_price_ratio-1)*100:.1f}%)")
+
+        # Store for reporting
+        self.combined_losses = combined_losses
 
         # State
         self.battery_level = self.MIN_BATTERY_LEVEL
@@ -85,7 +99,7 @@ class OptimizedBatterySimulation:
             for minute in grid_charge_candidates:
                 potential_usage = [m for m in deficit_minutes
                                  if m.timestamp > minute.timestamp
-                                 and m.import_price > minute.import_price * 1.2]
+                                 and m.import_price > minute.import_price * self.min_price_ratio]
 
                 if potential_usage:
                     before_level = self.battery_level
@@ -117,32 +131,46 @@ class OptimizedBatterySimulation:
         if self.battery_level >= self.MAX_BATTERY_LEVEL:
             return
 
-        # Calculate how much we could charge
-        available_space = self.MAX_BATTERY_LEVEL - self.battery_level
-        max_charge = min(
-            charge_minute.max_charging_power / 60,  # Convert W to Wh
-            available_space / self.charging_efficiency
-        )
+        # First, check price difference (like the old code did)
+        price_ratio = usage_minute.import_price / charge_minute.import_price
+        required_ratio = 1 + (0.2 * self.loss_multiplier)
 
-        if max_charge > 0:
-            # Calculate potential profit
-            charge_cost = (max_charge * charge_minute.import_price / 1000)
-            discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
-            potential_savings = discharge_energy * usage_minute.import_price / 1000
+        if price_ratio >= required_ratio:
+            # Calculate how much we could charge
+            available_space = self.MAX_BATTERY_LEVEL - self.battery_level
+            max_charge = min(
+                charge_minute.max_charging_power / 60,  # Convert W to Wh
+                available_space / self.charging_efficiency
+            )
 
-            if potential_savings > charge_cost * 1.1:  # 10% minimum profit threshold
-                # Perform grid charging
-                stored_energy = max_charge * self.charging_efficiency
-                self.battery_level += stored_energy
+            if max_charge > 0:
+                # Calculate potential profit considering losses
+                charge_cost = (max_charge * charge_minute.import_price / 1000)
+                discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
+                potential_savings = discharge_energy * usage_minute.import_price / 1000
 
-                # Track the energy flow
-                self.flows['grid_charged'].add(max_charge, charge_minute.import_price, charge_minute.timestamp)
+                # Debug for January 2025
+                # if charge_minute.timestamp.startswith("2025-01"):
+                #     print(f"\nDEBUG {charge_minute.timestamp}:")
+                #     print(f"  Import prices: {charge_minute.import_price:.4f} -> {usage_minute.import_price:.4f}")
+                #     print(f"  Price ratio: {price_ratio:.4f}")
+                #     print(f"  Required ratio: {required_ratio:.4f}")
+                #     print(f"  Potential savings: {potential_savings:.2f} SEK")
+                #     print(f"  Charge cost: {charge_cost:.2f} SEK")
 
-                self.actions_log.append(
-                    f"Grid charged {stored_energy:.2f}Wh at {charge_minute.timestamp} "
-                    f"(price: {charge_minute.import_price:.3f}, future price: {usage_minute.import_price:.3f}, "
-                    f"profit: {(potential_savings - charge_cost):.3f} SEK)"
-                )
+                if potential_savings > charge_cost:  # Must be profitable after losses
+                    stored_energy = max_charge * self.charging_efficiency
+                    self.battery_level += stored_energy
+
+                    # Track the energy flow
+                    self.flows['grid_charged'].add(max_charge, charge_minute.import_price, charge_minute.timestamp)
+
+                    # if charge_minute.timestamp.startswith("2025-01"):
+                    #     self.actions_log.append(
+                    #         f"Grid charged {stored_energy:.2f}Wh at {charge_minute.timestamp} "
+                    #         f"(price: {charge_minute.import_price:.3f}, future price: {usage_minute.import_price:.3f}, "
+                    #         f"ratio: {price_ratio:.3f}, profit: {(potential_savings - charge_cost):.3f} SEK)"
+                    #     )
 
     def _store_battery_level(self, timestamp: str):
         """Store the battery level for the current hour"""
@@ -163,49 +191,6 @@ class OptimizedBatterySimulation:
 
             if self.battery_level >= self.MAX_BATTERY_LEVEL * 0.99:
                 self.timestamps_full.append(minute.timestamp)
-
-    def _optimize_grid_charging(self, charge_candidates: List[MinuteData], 
-                              usage_candidates: List[MinuteData]) -> None:
-        """Determine if grid charging would be profitable"""
-        if not charge_candidates or not usage_candidates:
-            return
-
-        for charge_minute in charge_candidates:
-            if self.battery_level >= self.MAX_BATTERY_LEVEL:
-                break
-
-            # Find highest price usage periods that haven't been processed
-            potential_usage = [m for m in usage_candidates
-                             if m.timestamp > charge_minute.timestamp
-                             and m.import_price > charge_minute.import_price * 1.2]  # 20% price difference threshold
-
-            if potential_usage:
-                # Calculate how much we could charge
-                available_space = self.MAX_BATTERY_LEVEL - self.battery_level
-                max_charge = min(
-                    charge_minute.max_charging_power / 60,  # Convert W to Wh
-                    available_space / self.charging_efficiency
-                )
-
-                if max_charge > 0:
-                    # Calculate potential profit
-                    charge_cost = (max_charge * charge_minute.import_price / 1000)
-                    discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
-                    potential_savings = discharge_energy * potential_usage[0].import_price / 1000
-
-                    if potential_savings > charge_cost * 1.1:  # 10% minimum profit threshold
-                        # Perform grid charging
-                        stored_energy = max_charge * self.charging_efficiency
-                        self.battery_level += stored_energy
-                        
-                        # Track the energy flow
-                        self.flows['grid_charged'].add(max_charge, charge_minute.import_price, charge_minute.timestamp)
-                        
-                        self.actions_log.append(
-                            f"Grid charged {stored_energy:.2f}Wh at {charge_minute.timestamp} "
-                            f"(price: {charge_minute.import_price:.3f}, future price: {potential_usage[0].import_price:.3f}, "
-                            f"profit: {(potential_savings - charge_cost):.3f} SEK)"
-                        )
 
     def _use_stored_power(self, minute: MinuteData) -> None:
         """Use stored power, prioritizing highest import price periods"""
@@ -284,6 +269,14 @@ class OptimizedBatterySimulation:
                     print(f"         Cost impact: {flow.negative_price_cost:.2f} SEK")
             if all(flow.negative_price_energy == 0 for flow in self.flows.values()):
                 print("No energy was handled during negative prices")
+
+            # Add warning about price margin if it's too low
+            current_margin = self.min_price_ratio - 1
+            if current_margin < self.combined_losses:
+                print(f"\nWARNING: Current price margin ({current_margin*100:.1f}%) is lower than")
+                print(f"         combined losses ({self.combined_losses*100:.1f}%) from")
+                print(f"         charging loss ({(1-self.charging_efficiency)*100:.1f}%) and")
+                print(f"         discharging loss ({(1-self.discharging_efficiency)*100:.1f}%)")
 
             net_savings = (self.flows['battery_used'].cost -
                           self.flows['export_stored'].cost -
