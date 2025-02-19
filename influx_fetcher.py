@@ -77,7 +77,6 @@ def fetch_data(start: str, end: str, config: Dict[str, str]) -> Dict[str, Dict[s
           |> yield(name: "mean")
         '''
         print(f"Executing query for {entity['id']}...")
-        #print(f"{query}")
 
         result = query_api.query(query)
 
