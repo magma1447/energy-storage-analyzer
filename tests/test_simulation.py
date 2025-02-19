@@ -2,6 +2,7 @@
 import sys
 import json
 import gzip
+import argparse
 from datetime import datetime
 import os
 
@@ -9,68 +10,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from analyzer.simulation import OptimizedBatterySimulation
 
-# Expected results from sample-data/partial-year1.json.gz
-EXPECTED_RESULTS = {
-    'simulation_period': {
-        'start_date': "2024-05-01 00:00",
-        'end_date': "2025-02-14 23:00",
-        'days': 290,
-        'years': 0.79,
-    },
-    'energy_flows': {
-        'export_stored': 3633.56,  # kWh
-        'grid_charged': 2982.36,   # kWh
-        'battery_used': 5660.75,   # kWh
-    },
-    'financial': {
-        'export_lost': 1014.14,    # SEK
-        'grid_cost': 3799.76,      # SEK
-        'import_saved': 13065.99,  # SEK
-        'net_savings': 8252.09,    # SEK
-    },
-    'battery_stats': {
-        'times_full': 373,
-        'times_empty': 326,
-        'percent_full': 11.5,
-        'percent_empty': 51.5,
-        'percent_partial': 37.0,
-    },
-    'battery_cycles': {
-        'total_cycles': 235.9,
-        'cycles_per_day': 0.81,
-    },
-    'monthly_energy': {
-        '2024-05': {'stored': 724.67, 'grid': 39.43, 'used': 653.79},
-        '2024-06': {'stored': 665.77, 'grid': 73.68, 'used': 632.70},
-        '2024-07': {'stored': 661.44, 'grid': 102.67, 'used': 653.79},
-        '2024-08': {'stored': 653.51, 'grid': 70.83, 'used': 619.77},
-        '2024-09': {'stored': 558.13, 'grid': 108.25, 'used': 570.17},
-        '2024-10': {'stored': 325.69, 'grid': 320.98, 'used': 553.31},
-        '2024-11': {'stored': 22.46, 'grid': 618.57, 'used': 548.48},
-        '2024-12': {'stored': 2.44, 'grid': 558.20, 'used': 479.70},
-        '2025-01': {'stored': 6.39, 'grid': 757.72, 'used': 653.79},
-        '2025-02': {'stored': 13.06, 'grid': 332.02, 'used': 295.26},
-    },
-    'monthly_financial': {
-        '2024-05': {'export_lost': 170.46, 'grid_cost': 35.87, 'import_saved': 1400.99},
-        '2024-06': {'export_lost': 209.76, 'grid_cost': 71.05, 'import_saved': 1541.52},
-        '2024-07': {'export_lost': 177.04, 'grid_cost': 122.69, 'import_saved': 1362.50},
-        '2024-08': {'export_lost': 128.21, 'grid_cost': 76.24, 'import_saved': 1401.30},
-        '2024-09': {'export_lost': 157.04, 'grid_cost': 104.61, 'import_saved': 1032.44},
-        '2024-10': {'export_lost': 117.35, 'grid_cost': 350.73, 'import_saved': 990.25},
-        '2024-11': {'export_lost': 17.92, 'grid_cost': 856.96, 'import_saved': 1527.41},
-        '2024-12': {'export_lost': 3.63, 'grid_cost': 679.14, 'import_saved': 1285.15},
-        '2025-01': {'export_lost': 13.81, 'grid_cost': 944.06, 'import_saved': 1617.74},
-        '2025-02': {'export_lost': 18.93, 'grid_cost': 558.39, 'import_saved': 906.67},
-    },
-}
-
-def run_tests():
-    """Run all battery simulation tests"""
-    success_count = 0
-    failure_count = 0
-    test_results = []
-
+def run_simulation():
+    """Run simulation and return results"""
     # Load sample data
     with gzip.open('sample-data/partial-year1.json.gz', 'rt') as f:
         data = json.load(f)
@@ -91,6 +32,100 @@ def run_tests():
     first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
     last_date = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
     simulation_days = (last_date - first_date).total_seconds() / (24 * 3600)
+
+    # Gather current results
+    current_results = {
+        'simulation_period': {
+            'start_date': first_date.strftime("%Y-%m-%d %H:%M"),
+            'end_date': last_date.strftime("%Y-%m-%d %H:%M"),
+            'days': round(simulation_days, 1),
+            'years': round(simulation_days / 365, 2),
+        },
+        'energy_flows': {
+            'export_stored': round(simulation.flows['export_stored'].energy/1000, 2),
+            'grid_charged': round(simulation.flows['grid_charged'].energy/1000, 2),
+            'battery_used': round(simulation.flows['battery_used'].energy/1000, 2),
+        },
+        'financial': {
+            'export_lost': round(simulation.flows['export_stored'].cost, 2),
+            'grid_cost': round(simulation.flows['grid_charged'].cost, 2),
+            'import_saved': round(simulation.flows['battery_used'].cost, 2),
+            'net_savings': round(simulation.flows['battery_used'].cost -
+                                simulation.flows['export_stored'].cost -
+                                simulation.flows['grid_charged'].cost, 2),
+        },
+        'battery_stats': {
+            'times_full': len(simulation.timestamps_full),
+            'times_empty': len(simulation.timestamps_empty),
+            'percent_full': round((sum(1 for t in simulation.battery_levels.values()
+                                    if t >= simulation.MAX_BATTERY_LEVEL * 0.99) /
+                                len(simulation.battery_levels)) * 100, 1),
+            'percent_empty': round((sum(1 for t in simulation.battery_levels.values()
+                                     if t <= simulation.MIN_BATTERY_LEVEL * 1.01) /
+                                 len(simulation.battery_levels)) * 100, 1),
+        },
+        'battery_cycles': {
+            'total_cycles': round(simulation.flows['battery_used'].energy /
+                                 (simulation.BATTERY_CAPACITY_WH), 1),
+            'cycles_per_day': round((simulation.flows['battery_used'].energy /
+                                    simulation.BATTERY_CAPACITY_WH) /
+                                   simulation_days, 2),
+        },
+        'monthly_energy': {},
+        'monthly_financial': {}
+    }
+
+    # Calculate percent_partial after the other percentages
+    current_results['battery_stats']['percent_partial'] = round(
+        100 - current_results['battery_stats']['percent_full'] -
+        current_results['battery_stats']['percent_empty'], 1
+    )
+
+    # Gather monthly energy data
+    for month in sorted(simulation.flows['export_stored'].monthly_energy.keys()):
+        current_results['monthly_energy'][month] = {
+            'stored': round(simulation.flows['export_stored'].monthly_energy[month] / 1000, 2),
+            'grid': round(simulation.flows['grid_charged'].monthly_energy[month] / 1000, 2),
+            'used': round(simulation.flows['battery_used'].monthly_energy[month] / 1000, 2)
+        }
+
+    # Gather monthly financial data
+    for month in sorted(simulation.flows['export_stored'].monthly_cost.keys()):
+        current_results['monthly_financial'][month] = {
+            'export_lost': round(simulation.flows['export_stored'].monthly_cost[month], 2),
+            'grid_cost': round(simulation.flows['grid_charged'].monthly_cost[month], 2),
+            'import_saved': round(simulation.flows['battery_used'].monthly_cost[month], 2)
+        }
+
+    return current_results, simulation
+
+def create_expected_results_file(filename):
+    """Create a new expected results file from current simulation results"""
+    current_results, _ = run_simulation()
+
+    with open(filename, 'w') as f:
+        json.dump(current_results, f, indent=2)
+
+    print(f"Created new expected results file: {filename}")
+    return 0
+
+def run_tests(expected_results_file):
+    """Run all battery simulation tests against expected results"""
+    success_count = 0
+    failure_count = 0
+    test_results = []
+
+    # Load expected results
+    try:
+        with open(expected_results_file, 'r') as f:
+            expected_results = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Expected results file '{expected_results_file}' not found.")
+        print(f"Use '--create {expected_results_file}' to create it.")
+        return 1
+
+    # Run simulation
+    current_results, simulation = run_simulation()
 
     # Helper function to check and record test results
     def check_and_record(category, test_name, expected, current, tolerance=0.1):
@@ -117,142 +152,50 @@ def run_tests():
         return success
 
     # Test: Simulation Period
-    expected = EXPECTED_RESULTS['simulation_period']
-
-    # Test start date
-    current_start = first_date.strftime("%Y-%m-%d %H:%M")
-    check_and_record('simulation_period', 'start_date',
-                    expected['start_date'], current_start)
-
-    # Test end date
-    current_end = last_date.strftime("%Y-%m-%d %H:%M")
-    check_and_record('simulation_period', 'end_date',
-                    expected['end_date'], current_end)
-
-    # Test days
-    current_days = round(simulation_days, 1)
-    check_and_record('simulation_period', 'days',
-                    expected['days'], current_days, 1)
-
-    # Test years
-    current_years = round(simulation_days / 365, 2)
-    check_and_record('simulation_period', 'years',
-                    expected['years'], current_years, 0.01)
+    for key, expected_value in expected_results['simulation_period'].items():
+        current_value = current_results['simulation_period'][key]
+        tolerance = 1 if key == 'days' else 0.01 if key == 'years' else 0.1
+        check_and_record('simulation_period', key, expected_value, current_value, tolerance)
 
     # Test: Energy Flows
-    expected = EXPECTED_RESULTS['energy_flows']
-    flows = simulation.flows
-
-    # Test export_stored
-    current_export_stored = round(flows['export_stored'].energy/1000, 2)
-    check_and_record('energy_flows', 'export_stored',
-                    expected['export_stored'], current_export_stored)
-
-    # Test grid_charged
-    current_grid_charged = round(flows['grid_charged'].energy/1000, 2)
-    check_and_record('energy_flows', 'grid_charged',
-                    expected['grid_charged'], current_grid_charged)
-
-    # Test battery_used
-    current_battery_used = round(flows['battery_used'].energy/1000, 2)
-    check_and_record('energy_flows', 'battery_used',
-                    expected['battery_used'], current_battery_used)
+    for key, expected_value in expected_results['energy_flows'].items():
+        current_value = current_results['energy_flows'][key]
+        check_and_record('energy_flows', key, expected_value, current_value)
 
     # Test: Financial Results
-    expected = EXPECTED_RESULTS['financial']
-
-    # Test export_lost
-    current_export_lost = round(flows['export_stored'].cost, 2)
-    check_and_record('financial', 'export_lost',
-                    expected['export_lost'], current_export_lost)
-
-    # Test grid_cost
-    current_grid_cost = round(flows['grid_charged'].cost, 2)
-    check_and_record('financial', 'grid_cost',
-                    expected['grid_cost'], current_grid_cost)
-
-    # Test import_saved
-    current_import_saved = round(flows['battery_used'].cost, 2)
-    check_and_record('financial', 'import_saved',
-                    expected['import_saved'], current_import_saved)
-
-    # Test net_savings
-    current_net_savings = round(flows['battery_used'].cost - flows['export_stored'].cost - flows['grid_charged'].cost, 2)
-    check_and_record('financial', 'net_savings',
-                    expected['net_savings'], current_net_savings)
+    for key, expected_value in expected_results['financial'].items():
+        current_value = current_results['financial'][key]
+        check_and_record('financial', key, expected_value, current_value)
 
     # Test: Battery Statistics
-    expected = EXPECTED_RESULTS['battery_stats']
-
-    # Test counts
-    current_times_full = len(simulation.timestamps_full)
-    check_and_record('battery_stats', 'times_full',
-                    expected['times_full'], current_times_full, 0)
-
-    current_times_empty = len(simulation.timestamps_empty)
-    check_and_record('battery_stats', 'times_empty',
-                    expected['times_empty'], current_times_empty, 0)
-
-    # Test percentages
-    hourly_samples = len(simulation.battery_levels)
-    full_count = sum(1 for t in simulation.battery_levels.values()
-                    if t >= simulation.MAX_BATTERY_LEVEL * 0.99)
-    empty_count = sum(1 for t in simulation.battery_levels.values()
-                     if t <= simulation.MIN_BATTERY_LEVEL * 1.01)
-
-    full_percent = round((full_count / hourly_samples) * 100, 1)
-    check_and_record('battery_stats', 'percent_full',
-                    expected['percent_full'], full_percent)
-
-    empty_percent = round((empty_count / hourly_samples) * 100, 1)
-    check_and_record('battery_stats', 'percent_empty',
-                    expected['percent_empty'], empty_percent)
-
-    partial_percent = round(100 - full_percent - empty_percent, 1)
-    check_and_record('battery_stats', 'percent_partial',
-                    expected['percent_partial'], partial_percent)
+    for key, expected_value in expected_results['battery_stats'].items():
+        current_value = current_results['battery_stats'][key]
+        tolerance = 0 if key in ['times_full', 'times_empty'] else 0.1
+        check_and_record('battery_stats', key, expected_value, current_value, tolerance)
 
     # Test: Battery Cycles
-    expected = EXPECTED_RESULTS['battery_cycles']
-
-    total_discharge = simulation.flows['battery_used'].energy / 1000  # kWh
-    cycles = round(total_discharge / (simulation.BATTERY_CAPACITY_WH / 1000), 1)
-    check_and_record('battery_cycles', 'total_cycles',
-                    expected['total_cycles'], cycles)
-
-    cycles_per_day = round(cycles / simulation_days, 2)
-    check_and_record('battery_cycles', 'cycles_per_day',
-                    expected['cycles_per_day'], cycles_per_day, 0.01)
+    for key, expected_value in expected_results['battery_cycles'].items():
+        current_value = current_results['battery_cycles'][key]
+        tolerance = 0.1 if key == 'total_cycles' else 0.01
+        check_and_record('battery_cycles', key, expected_value, current_value, tolerance)
 
     # Test: Monthly Energy
-    expected = EXPECTED_RESULTS['monthly_energy']
-    for month, values in expected.items():
-        stored = round(simulation.flows['export_stored'].monthly_energy[month] / 1000, 2)
-        check_and_record('monthly_energy', f"{month} -> stored",
-                        values['stored'], stored)
-
-        grid = round(simulation.flows['grid_charged'].monthly_energy[month] / 1000, 2)
-        check_and_record('monthly_energy', f"{month} -> grid",
-                        values['grid'], grid)
-
-        used = round(simulation.flows['battery_used'].monthly_energy[month] / 1000, 2)
-        check_and_record('monthly_energy', f"{month} -> used",
-                        values['used'], used)
+    for month, values in expected_results['monthly_energy'].items():
+        for key, expected_value in values.items():
+            if month in current_results['monthly_energy']:
+                current_value = current_results['monthly_energy'][month][key]
+                check_and_record('monthly_energy', f"{month} -> {key}", expected_value, current_value)
+            else:
+                check_and_record('monthly_energy', f"{month} -> {key}", expected_value, None)
 
     # Test: Monthly Financial
-    expected = EXPECTED_RESULTS['monthly_financial']
-    for month, values in expected.items():
-        export_lost = round(simulation.flows['export_stored'].monthly_cost[month], 2)
-        check_and_record('monthly_financial', f"{month} -> export_lost",
-                        values['export_lost'], export_lost)
-
-        grid_cost = round(simulation.flows['grid_charged'].monthly_cost[month], 2)
-        check_and_record('monthly_financial', f"{month} -> grid_cost",
-                        values['grid_cost'], grid_cost)
-
-        import_saved = round(simulation.flows['battery_used'].monthly_cost[month], 2)
-        check_and_record('monthly_financial', f"{month} -> import_saved",
-                        values['import_saved'], import_saved)
+    for month, values in expected_results['monthly_financial'].items():
+        for key, expected_value in values.items():
+            if month in current_results['monthly_financial']:
+                current_value = current_results['monthly_financial'][month][key]
+                check_and_record('monthly_financial', f"{month} -> {key}", expected_value, current_value)
+            else:
+                check_and_record('monthly_financial', f"{month} -> {key}", expected_value, None)
 
     # Print test results in a nicely formatted way
     print_test_results(test_results, success_count, failure_count)
@@ -313,5 +256,19 @@ def print_test_results(test_results, success_count, failure_count):
     print(f"Failures:    {failure_count}")
     print(f"Success rate: {(success_count / total_tests) * 100:.1f}%")
 
+def main():
+    """Parse arguments and run tests or create expected results file"""
+    parser = argparse.ArgumentParser(description='Battery Simulation Test Suite')
+    parser.add_argument('--create', metavar='FILE', help='Create a new expected results file')
+    parser.add_argument('--expected', metavar='FILE', default='tests/expected_results.json',
+                       help='Specify the expected results file (default: tests/expected_results.json)')
+
+    args = parser.parse_args()
+
+    if args.create:
+        return create_expected_results_file(args.create)
+    else:
+        return run_tests(args.expected)
+
 if __name__ == '__main__':
-    sys.exit(run_tests())
+    sys.exit(main())
