@@ -47,6 +47,19 @@ options:
 
 Verifies that the output data is as expected with the given sample file.
 
-# json data
-The current json file has been created by `coding/power-usage-battery-analyze/app3.php`. This code should be ported to python and added to this repository.
+# Influx fetcher
+```
+python3 influx_fetcher.py \
+  --url "influx-url" \
+  --token "access-token" \
+  --org "your-org" \
+  --bucket "your-bucket" \
+  --start "2024-05-01" \
+  --end "2025-02-14T23:59:59Z" \
+  --output "sample-data/partial-year3.json" \
+  --tax-reduction 0 \
+  --network-benefits 0.08 \
+  --transfer-cost 0.8
+```
 
+Hint: Needs `python3-influxdb-client` on Debian. Or equivalents in other distributions.
