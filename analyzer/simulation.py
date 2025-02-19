@@ -218,7 +218,11 @@ class OptimizedBatterySimulation:
             # Find first and last dates
             all_hours = sorted(self.battery_levels.keys())
             first_date = datetime.strptime(all_hours[0], "%Y-%m-%dT%H:00:00Z")
-            last_date = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+
+            # For the last date, we need to add 59:59 to show the true end time
+            last_hour = datetime.strptime(all_hours[-1], "%Y-%m-%dT%H:00:00Z")
+            last_date = datetime(last_hour.year, last_hour.month, last_hour.day,
+                                last_hour.hour, 59, 59)
 
             # Format dates and calculate duration
             first_date_str = first_date.strftime("%Y-%m-%d %H:%M")
