@@ -4,7 +4,7 @@ A tool to analyze existing energy data to see how much money an energy storing s
 Note that this is based on historical data, that you must have. And also of course historical prices. This doesn't tell the whole truth about the future.
 
 # Usage
-`python3 -m analyzer.main sample-data/partial-year1.json.gz`
+`python3 -m analyzer.main sample-data/partial-year2.json.gz`
 
 Additional options:
 ```
