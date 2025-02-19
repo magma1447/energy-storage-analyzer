@@ -2,30 +2,30 @@
   "simulation_period": {
     "start_date": "2024-05-01 00:00",
     "end_date": "2025-02-14 23:00",
-    "days": 290,
+    "days": 290.0,
     "years": 0.79
   },
   "energy_flows": {
     "export_stored": 3633.56,
-    "grid_charged": 2982.36,
-    "battery_used": 5660.75
+    "grid_charged": 3070.07,
+    "battery_used": 5735.79
   },
   "financial": {
     "export_lost": 1014.14,
-    "grid_cost": 3799.76,
-    "import_saved": 13065.99,
-    "net_savings": 8252.09
+    "grid_cost": 3903.1,
+    "import_saved": 13173.57,
+    "net_savings": 8256.33
   },
   "battery_stats": {
     "times_full": 373,
-    "times_empty": 326,
-    "percent_full": 11.5,
-    "percent_empty": 51.5,
-    "percent_partial": 37.0
+    "times_empty": 329,
+    "percent_full": 11.9,
+    "percent_empty": 50.9,
+    "percent_partial": 37.2
   },
   "battery_cycles": {
-    "total_cycles": 235.9,
-    "cycles_per_day": 0.81
+    "total_cycles": 239.0,
+    "cycles_per_day": 0.82
   },
   "monthly_energy": {
     "2024-05": {
@@ -36,7 +36,7 @@
     "2024-06": {
       "stored": 665.77,
       "grid": 73.68,
-      "used": 632.70
+      "used": 632.7
     },
     "2024-07": {
       "stored": 661.44,
@@ -55,8 +55,8 @@
     },
     "2024-10": {
       "stored": 325.69,
-      "grid": 320.98,
-      "used": 553.31
+      "grid": 328.46,
+      "used": 559.71
     },
     "2024-11": {
       "stored": 22.46,
@@ -65,8 +65,8 @@
     },
     "2024-12": {
       "stored": 2.44,
-      "grid": 558.20,
-      "used": 479.70
+      "grid": 638.42,
+      "used": 548.34
     },
     "2025-01": {
       "stored": 6.39,
@@ -93,12 +93,12 @@
     "2024-07": {
       "export_lost": 177.04,
       "grid_cost": 122.69,
-      "import_saved": 1362.50
+      "import_saved": 1362.5
     },
     "2024-08": {
       "export_lost": 128.21,
       "grid_cost": 76.24,
-      "import_saved": 1401.30
+      "import_saved": 1401.3
     },
     "2024-09": {
       "export_lost": 157.04,
@@ -107,8 +107,8 @@
     },
     "2024-10": {
       "export_lost": 117.35,
-      "grid_cost": 350.73,
-      "import_saved": 990.25
+      "grid_cost": 358.6,
+      "import_saved": 998.24
     },
     "2024-11": {
       "export_lost": 17.92,
@@ -117,8 +117,8 @@
     },
     "2024-12": {
       "export_lost": 3.63,
-      "grid_cost": 679.14,
-      "import_saved": 1285.15
+      "grid_cost": 774.62,
+      "import_saved": 1384.75
     },
     "2025-01": {
       "export_lost": 13.81,
