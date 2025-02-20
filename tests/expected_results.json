@@ -19,9 +19,9 @@
   "battery_stats": {
     "times_full": 373,
     "times_empty": 329,
-    "percent_full": 11.9,
-    "percent_empty": 50.9,
-    "percent_partial": 37.2
+    "percent_full": 18.8,
+    "percent_empty": 28.9,
+    "percent_partial": 52.3
   },
   "battery_cycles": {
     "total_cycles": 239.0,

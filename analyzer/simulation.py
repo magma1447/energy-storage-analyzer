@@ -116,11 +116,11 @@ class OptimizedBatterySimulation:
         for minute in excess_minutes:
             before_level = self.battery_level
             self._store_excess_power(minute)
-            # Track hourly change
+            # Validate after operation
+            self._validate_battery_level(f"storing excess at {minute.timestamp}")
+            # Track hourly change AFTER validation
             hour = minute.timestamp[:13] + ":00:00Z"
             hourly_changes[hour] += self.battery_level - before_level
-            # Validate after each minute update
-            self._validate_battery_level(f"storing excess at {minute.timestamp}")
 
         # 2. Then handle grid charging
         if self.enable_grid_charge:
@@ -132,21 +132,21 @@ class OptimizedBatterySimulation:
                 if potential_usage:
                     before_level = self.battery_level
                     self._perform_grid_charging(minute, potential_usage[0])
-                    # Track hourly change
+                    # Validate after operation
+                    self._validate_battery_level(f"grid charging at {minute.timestamp}")
+                    # Track hourly change AFTER validation
                     hour = minute.timestamp[:13] + ":00:00Z"
                     hourly_changes[hour] += self.battery_level - before_level
-                    # Validate after each minute update
-                    self._validate_battery_level(f"grid charging at {minute.timestamp}")
 
         # 3. Finally use stored power
         for minute in deficit_minutes:
             before_level = self.battery_level
             self._use_stored_power(minute)
-            # Track hourly change
+            # Validate after operation - THIS IS IMPORTANT
+            self._validate_battery_level(f"using stored power at {minute.timestamp}")
+            # Track hourly change AFTER validation
             hour = minute.timestamp[:13] + ":00:00Z"
             hourly_changes[hour] += self.battery_level - before_level
-            # Validate after each minute update
-            self._validate_battery_level(f"using stored power at {minute.timestamp}")
 
         # Update battery levels for all affected hours
         for hour in sorted(hourly_changes.keys()):
@@ -157,6 +157,13 @@ class OptimizedBatterySimulation:
                 self.battery_levels[hour] = base_level + hourly_changes[hour]
             else:
                 self.battery_levels[hour] += hourly_changes[hour]
+
+            # IMPORTANT FIX: Ensure battery_levels also respect the physical constraints
+            # This ensures visualization never shows invalid battery levels
+            if self.battery_levels[hour] < self.MIN_BATTERY_LEVEL:
+                self.battery_levels[hour] = self.MIN_BATTERY_LEVEL
+            elif self.battery_levels[hour] > self.MAX_BATTERY_LEVEL:
+                self.battery_levels[hour] = self.MAX_BATTERY_LEVEL
 
     def _perform_grid_charging(self, charge_minute: MinuteData, usage_minute: MinuteData) -> None:
         """Perform grid charging if profitable"""
@@ -214,11 +221,19 @@ class OptimizedBatterySimulation:
             return
 
         energy_needed = -minute.wh
-        usable_battery_energy = (self.battery_level - self.MIN_BATTERY_LEVEL) * self.discharging_efficiency
+        # Make sure we don't go below minimum battery level
+        usable_battery_energy = max(0, (self.battery_level - self.MIN_BATTERY_LEVEL)) * self.discharging_efficiency
         energy_from_battery = min(energy_needed, usable_battery_energy)
 
         if energy_from_battery > 0:
             actual_battery_drain = energy_from_battery / self.discharging_efficiency
+
+            # Additional safety check to prevent going below minimum
+            if self.battery_level - actual_battery_drain < self.MIN_BATTERY_LEVEL:
+                # Adjust the drain to hit exactly the minimum level
+                actual_battery_drain = self.battery_level - self.MIN_BATTERY_LEVEL
+                energy_from_battery = actual_battery_drain * self.discharging_efficiency
+
             self.battery_level -= actual_battery_drain
             
             # Track the energy flow
