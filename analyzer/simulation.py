@@ -42,6 +42,30 @@ class OptimizedBatterySimulation:
         self.actions_log = []
         self.battery_levels = defaultdict(float)  # Track battery level by hour
 
+        # Validate initial battery level
+        self._validate_battery_level("initialization")
+
+    def _validate_battery_level(self, operation: str) -> None:
+        """
+        Validate that battery level is within acceptable ranges.
+        Adds asserts to catch if battery level goes outside allowed range.
+
+        Args:
+            operation: String describing where validation is being performed
+        """
+        min_allowed = self.MIN_BATTERY_LEVEL * 0.9  # 10% below minimum
+        max_allowed = self.MAX_BATTERY_LEVEL * 1.1  # 10% above maximum
+
+        assert self.battery_level >= 0, f"Error: Battery level negative ({self.battery_level:.2f}Wh) after {operation}"
+        assert self.battery_level >= min_allowed, (
+            f"Error: Battery level ({self.battery_level:.2f}Wh) below 90% of minimum allowed "
+            f"({self.MIN_BATTERY_LEVEL:.2f}Wh) after {operation}"
+        )
+        assert self.battery_level <= max_allowed, (
+            f"Error: Battery level ({self.battery_level:.2f}Wh) above 110% of maximum allowed "
+            f"({self.MAX_BATTERY_LEVEL:.2f}Wh) after {operation}"
+        )
+
     def process_data(self, data: Dict[str, Dict[str, Any]], window_size: int = 1440) -> None:
         """Process data in sliding windows to enable look-ahead optimization"""
         print(f"\nProcessing data with {window_size} minute windows...")
@@ -53,6 +77,8 @@ class OptimizedBatterySimulation:
             window_data = [MinuteData.from_json(ts, data[ts], self.max_charging_power_w)
                           for ts in window_timestamps]
             self._optimize_window(window_data)
+            # Validate battery level after each window
+            self._validate_battery_level(f"window {i//window_size + 1}")
 
     def _optimize_window(self, window: List[MinuteData]) -> None:
         """Optimize battery usage for a time window"""
@@ -93,6 +119,8 @@ class OptimizedBatterySimulation:
             # Track hourly change
             hour = minute.timestamp[:13] + ":00:00Z"
             hourly_changes[hour] += self.battery_level - before_level
+            # Validate after each minute update
+            self._validate_battery_level(f"storing excess at {minute.timestamp}")
 
         # 2. Then handle grid charging
         if self.enable_grid_charge:
@@ -107,6 +135,8 @@ class OptimizedBatterySimulation:
                     # Track hourly change
                     hour = minute.timestamp[:13] + ":00:00Z"
                     hourly_changes[hour] += self.battery_level - before_level
+                    # Validate after each minute update
+                    self._validate_battery_level(f"grid charging at {minute.timestamp}")
 
         # 3. Finally use stored power
         for minute in deficit_minutes:
@@ -115,6 +145,8 @@ class OptimizedBatterySimulation:
             # Track hourly change
             hour = minute.timestamp[:13] + ":00:00Z"
             hourly_changes[hour] += self.battery_level - before_level
+            # Validate after each minute update
+            self._validate_battery_level(f"using stored power at {minute.timestamp}")
 
         # Update battery levels for all affected hours
         for hour in sorted(hourly_changes.keys()):
@@ -149,28 +181,12 @@ class OptimizedBatterySimulation:
                 discharge_energy = max_charge * self.charging_efficiency * self.discharging_efficiency
                 potential_savings = discharge_energy * usage_minute.import_price / 1000
 
-                # Debug for January 2025
-                # if charge_minute.timestamp.startswith("2025-01"):
-                #     print(f"\nDEBUG {charge_minute.timestamp}:")
-                #     print(f"  Import prices: {charge_minute.import_price:.4f} -> {usage_minute.import_price:.4f}")
-                #     print(f"  Price ratio: {price_ratio:.4f}")
-                #     print(f"  Required ratio: {required_ratio:.4f}")
-                #     print(f"  Potential savings: {potential_savings:.2f} SEK")
-                #     print(f"  Charge cost: {charge_cost:.2f} SEK")
-
                 if potential_savings > charge_cost:  # Must be profitable after losses
                     stored_energy = max_charge * self.charging_efficiency
                     self.battery_level += stored_energy
 
                     # Track the energy flow
                     self.flows['grid_charged'].add(max_charge, charge_minute.import_price, charge_minute.timestamp)
-
-                    # if charge_minute.timestamp.startswith("2025-01"):
-                    #     self.actions_log.append(
-                    #         f"Grid charged {stored_energy:.2f}Wh at {charge_minute.timestamp} "
-                    #         f"(price: {charge_minute.import_price:.3f}, future price: {usage_minute.import_price:.3f}, "
-                    #         f"ratio: {price_ratio:.3f}, profit: {(potential_savings - charge_cost):.3f} SEK)"
-                    #     )
 
     def _store_battery_level(self, timestamp: str):
         """Store the battery level for the current hour"""
