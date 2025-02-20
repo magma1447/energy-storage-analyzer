@@ -29,11 +29,11 @@ def create_viewer_html(json_data: str) -> str:
         function createCharts() {{
             const timestamps = data.map(d => d.timestamp);
             
-            // Combined chart with battery level and energy flows
+            // Combined chart with battery level and energy flows - all on same y-axis
             const traces = [{{
                 name: 'Battery Level',
                 x: timestamps,
-                y: data.map(d => d.batteryLevel / 1000),
+                y: data.map(d => d.batteryLevel / 1000), // Show raw values
                 type: 'scatter',
                 mode: 'lines',
                 line: {{ shape: 'hv', color: 'purple', width: 2 }}
@@ -43,7 +43,7 @@ def create_viewer_html(json_data: str) -> str:
                 y: Array(timestamps.length).fill(batteryConfig.minLevel / 1000),
                 type: 'scatter',
                 mode: 'lines',
-                line: {{ 
+                line: {{
                     shape: 'hv',
                     color: 'red',
                     dash: 'dash',
@@ -55,7 +55,7 @@ def create_viewer_html(json_data: str) -> str:
                 y: Array(timestamps.length).fill(batteryConfig.maxLevel / 1000),
                 type: 'scatter',
                 mode: 'lines',
-                line: {{ 
+                line: {{
                     shape: 'hv',
                     color: 'green',
                     dash: 'dash',
@@ -64,53 +64,61 @@ def create_viewer_html(json_data: str) -> str:
             }}, {{
                 name: 'Solar Stored',
                 x: timestamps,
-                y: data.map(d => d.solarStored / 1000),
+                y: data.map(d => d.solarStored / 1000), // Show raw values
                 type: 'scatter',
                 mode: 'lines',
-                line: {{ shape: 'hv', color: 'green' }},
-                yaxis: 'y2'
+                line: {{ shape: 'hv', color: 'green' }}
             }}, {{
                 name: 'Grid Charged',
                 x: timestamps,
-                y: data.map(d => d.gridCharged / 1000),
+                y: data.map(d => d.gridCharged / 1000), // Show raw values
                 type: 'scatter',
                 mode: 'lines',
-                line: {{ shape: 'hv', color: 'red' }},
-                yaxis: 'y2'
+                line: {{ shape: 'hv', color: 'red' }}
             }}, {{
                 name: 'Battery Used',
                 x: timestamps,
-                y: data.map(d => d.batteryUsed / 1000),
+                y: data.map(d => d.batteryUsed / 1000), // Show raw values
                 type: 'scatter',
                 mode: 'lines',
-                line: {{ shape: 'hv', color: 'blue' }},
-                yaxis: 'y2'
+                line: {{ shape: 'hv', color: 'blue' }}
             }}];
+
+            // Calculate min and max values for y-axis scaling
+            const allValues = [
+                ...data.map(d => d.batteryLevel / 1000),
+                ...data.map(d => d.solarStored / 1000),
+                ...data.map(d => d.gridCharged / 1000),
+                ...data.map(d => d.batteryUsed / 1000)
+            ].filter(v => !isNaN(v) && v !== null && v !== undefined);
+
+            const minValue = Math.min(0, ...allValues); // Use 0 or actual minimum if lower
+            const maxValue = Math.max(
+                batteryConfig.batteryCapacity / 1000,
+                ...allValues
+            );
 
             const layout = {{
                 title: 'Battery State and Energy Flows',
-                xaxis: {{ 
+                xaxis: {{
                     title: 'Time',
                     tickformat: '%Y-%m-%d %H:%M'
                 }},
-                yaxis: {{ 
-                    title: 'Battery Level (kWh)',
-                    range: [0, batteryConfig.batteryCapacity / 1000],
+                yaxis: {{
+                    title: 'Energy (kWh)',
+                    range: [minValue, maxValue],
                     side: 'left'
                 }},
-                yaxis2: {{
-                    title: 'Energy Flow (kWh)',
-                    side: 'right',
-                    overlaying: 'y'
-                }},
                 legend: {{
-                    x: 1.1,
+                    x: 1.05,
                     y: 1
                 }},
                 hovermode: 'x unified',
                 margin: {{
-                    r: 100,
-                    t: 30
+                    r: 50,
+                    t: 30,
+                    b: 50,
+                    l: 60
                 }}
             }};
 
@@ -121,20 +129,33 @@ def create_viewer_html(json_data: str) -> str:
             const totalSamples = data.length;
             const fullCount = data.filter(d => d.batteryLevel >= batteryConfig.maxLevel * 0.99).length;
             const emptyCount = data.filter(d => d.batteryLevel <= batteryConfig.minLevel * 1.01).length;
-            
+
             const fullPercent = (fullCount / totalSamples * 100).toFixed(1);
             const emptyPercent = (emptyCount / totalSamples * 100).toFixed(1);
-            const partialPercent = (100 - fullPercent - emptyPercent).toFixed(1);
+            const partialPercent = (100 - parseFloat(fullPercent) - parseFloat(emptyPercent)).toFixed(1);
 
-            document.getElementById('stats').textContent = 
+            document.getElementById('stats').textContent =
                 `Battery State: ${{fullPercent}}% Full, ${{emptyPercent}}% Empty, ${{partialPercent}}% Partial`;
         }}
 
         function resetZoom() {{
+            // Calculate min and max values for reset
+            const allValues = [
+                ...data.map(d => d.batteryLevel / 1000),
+                ...data.map(d => d.solarStored / 1000),
+                ...data.map(d => d.gridCharged / 1000),
+                ...data.map(d => d.batteryUsed / 1000)
+            ].filter(v => !isNaN(v) && v !== null && v !== undefined);
+
+            const minValue = Math.min(0, ...allValues);
+            const maxValue = Math.max(
+                batteryConfig.batteryCapacity / 1000,
+                ...allValues
+            );
+
             Plotly.relayout('chart', {{
                 'xaxis.autorange': true,
-                'yaxis.autorange': true,
-                'yaxis2.autorange': true
+                'yaxis.range': [minValue, maxValue]
             }});
         }}
 
