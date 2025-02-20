@@ -13,7 +13,7 @@ from analyzer.simulation import OptimizedBatterySimulation
 def run_simulation():
     """Run simulation and return results"""
     # Load sample data
-    with gzip.open('sample-data/partial-year1.json.gz', 'rt') as f:
+    with gzip.open('sample-data/partial-year2.json.gz', 'rt') as f:
         data = json.load(f)
 
     # Run simulation with default parameters
