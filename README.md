@@ -6,7 +6,7 @@ The software handles this:
 - Charge from grid.
 - Use stored energy when most profitable.
 
-Note that this is based on historical data, that you must have. And also of course historical prices, which you'll also have to provide. This doesn't tell the whole truth about the future.
+Note that this is based on historical data, that you must have. And also of course historical prices, which you'll also have to provide. This doesn't tell the whole truth about the future. In fact, since this is based on **real** and **historical** data, where the prediction could be perfect, this **should** give a better result than in reality.
 
 # Usage
 `python3 -m analyzer.main sample-data/partial-year2.json.gz`
