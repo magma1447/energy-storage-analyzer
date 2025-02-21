@@ -1,7 +1,7 @@
 # energy-storage-analyzer
 A tool to analyze existing energy data to see how much money an energy storing system would have saved.
 
-Note that this is based on historical data, that you must have. And also of course historical prices. This doesn't tell the whole truth about the future.
+Note that this is based on historical data, that you must have. And also of course historical prices, which you'll also have to provide. This doesn't tell the whole truth about the future.
 
 # Usage
 `python3 -m analyzer.main sample-data/partial-year2.json.gz`
@@ -41,6 +41,32 @@ options:
                         Start time in ISO format (e.g., 2024-05-01T00:00:00Z)
   --end-time END_TIME   End time in ISO format (e.g., 2024-05-02T00:00:00Z)
 ```
+
+# Data
+The software reads data in the following format.
+```
+{
+  "2024-05-01T00:01:00Z": {
+    "Wh": -92.49444444444445,
+    "importPrice": 1.4260000000000002,
+    "exportPrice": 0.5008
+  },
+  "2024-05-01T00:02:00Z": {
+    "Wh": -94.23333333333333,
+    "importPrice": 1.4260000000000002,
+    "exportPrice": 0.5008
+  },
+  ...
+}
+
+```
+The analytics will work best if you include **all** costs/benefits that scales with (k)Wh.
+
+The code has been designed with minutely data in mind. It's untested how it behaves with lower and higher data resolutions. The higher the resolution, the higher the accurancy of the output though.
+
+# Visual representation
+By using the `--output-dir` option the code generates a chart showing when different actions happens. With this you should be able to get a better understanding of the flow of energy and the battery level. This will be rendered as a single html file so that you easily can open it in your web browser.
+
 
 # Tests
 `python3 tests/test_simulation.py`
