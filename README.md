@@ -1,6 +1,11 @@
 # energy-storage-analyzer
 A tool to analyze existing energy data to see how much money an energy storing system would have saved.
 
+The software handles this:
+- Storing excess solar power.
+- Charge from grid.
+- Use stored energy when most profitable.
+
 Note that this is based on historical data, that you must have. And also of course historical prices, which you'll also have to provide. This doesn't tell the whole truth about the future.
 
 # Usage
